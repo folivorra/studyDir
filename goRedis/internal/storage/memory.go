@@ -1,8 +1,10 @@
 package storage
 
 import (
+	"encoding/json"
 	"fmt"
 	"github.com/folivorra/studyDir/tree/develop/goRedis/internal/model"
+	"os"
 	"sync"
 )
 
@@ -66,4 +68,38 @@ func (s *InMemoryStorage) GetItem(id int) (item model.Item, err error) {
 		return model.Item{}, fmt.Errorf("item does not exist")
 	}
 	return s.items[id], nil
+}
+
+func (s *InMemoryStorage) SaveToFile(path string) (err error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	data, err := json.MarshalIndent(s.items, "", "\t")
+	if err != nil {
+		return err
+	}
+
+	if err = os.WriteFile(path, data, 0644); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (s *InMemoryStorage) LoadFromFile(path string) (err error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return err
+	}
+
+	tempStorage := make(map[int]model.Item)
+
+	if err = json.Unmarshal(data, &tempStorage); err != nil {
+		return err
+	}
+
+	s.mu.Lock()
+	s.items = tempStorage
+	s.mu.Unlock()
+
+	return nil
 }

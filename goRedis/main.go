@@ -14,7 +14,13 @@ import (
 )
 
 func main() {
-	store := storage.NewInMemoryStorage()                 // хранилище
+	store := storage.NewInMemoryStorage() // хранилище
+
+	if err := store.LoadFromFile("backup.json"); err != nil {
+		log.Println("Load from file failed:", err)
+	}
+	// пытаемся загрузить данные из бэкап-файла
+
 	itemController := controller.NewItemController(store) // контроллер
 	router := mux.NewRouter()                             // маршрутизатор
 	itemController.RegisterRoutes(router)                 // регистрация маршрутов по заданным методам
@@ -47,5 +53,13 @@ func main() {
 		log.Fatal("Server forced to shutdown: ", err)
 	}
 	// даем серверу мягко завершится за эти 5 секунд, иначе завершаем аварийно
+
+	if err := store.SaveToFile("backup.json"); err != nil {
+		log.Println("Failed to save backup.json:", err)
+	} else {
+		log.Println("Saved backup.json")
+	}
+	// делаем бэкап в файл
+
 	log.Println("Server exiting")
 }
