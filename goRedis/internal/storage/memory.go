@@ -32,9 +32,6 @@ func (s *InMemoryStorage) AddItem(item model.Item) (err error) {
 func (s *InMemoryStorage) GetAllItems() (items []model.Item, err error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	if len(s.items) == 0 {
-		return nil, fmt.Errorf("no items")
-	}
 	items = make([]model.Item, len(s.items))
 	for i, item := range s.items {
 		items[i] = item
