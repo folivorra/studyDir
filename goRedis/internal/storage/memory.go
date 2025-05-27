@@ -1,10 +1,8 @@
 package storage
 
 import (
-	"encoding/json"
 	"fmt"
 	"github.com/folivorra/studyDir/tree/develop/goRedis/internal/model"
-	"os"
 	"sync"
 )
 
@@ -12,8 +10,6 @@ type InMemoryStorage struct {
 	mu    sync.RWMutex
 	items map[int]model.Item
 }
-
-var _ Storager = (*InMemoryStorage)(nil)
 
 func NewInMemoryStorage() *InMemoryStorage {
 	return &InMemoryStorage{
@@ -70,36 +66,24 @@ func (s *InMemoryStorage) GetItem(id int) (item model.Item, err error) {
 	return s.items[id], nil
 }
 
-func (s *InMemoryStorage) SaveToFile(path string) (err error) {
+func (s *InMemoryStorage) Snapshot() map[int]model.Item {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	data, err := json.MarshalIndent(s.items, "", "\t")
-	if err != nil {
-		return err
+	temp := make(map[int]model.Item, len(s.items))
+	for k, v := range s.items {
+		temp[k] = v
 	}
-
-	if err = os.WriteFile(path, data, 0644); err != nil {
-		return err
-	}
-	return nil
+	return temp
 }
 
-func (s *InMemoryStorage) LoadFromFile(path string) (err error) {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return err
-	}
-
-	tempStorage := make(map[int]model.Item)
-
-	if err = json.Unmarshal(data, &tempStorage); err != nil {
-		return err
-	}
-
+func (s *InMemoryStorage) Replace(data map[int]model.Item) {
 	s.mu.Lock()
-	s.items = tempStorage
-	s.mu.Unlock()
+	defer s.mu.Unlock()
 
-	return nil
+	s.items = make(map[int]model.Item, len(data))
+
+	for k, v := range data {
+		s.items[k] = v
+	}
 }

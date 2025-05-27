@@ -4,8 +4,10 @@ import (
 	"context"
 	"fmt"
 	"github.com/folivorra/studyDir/tree/develop/goRedis/internal/controller"
+	"github.com/folivorra/studyDir/tree/develop/goRedis/internal/persist"
 	"github.com/folivorra/studyDir/tree/develop/goRedis/internal/storage"
 	"github.com/gorilla/mux"
+	"github.com/redis/go-redis/v9"
 	"log"
 	"net/http"
 	"os"
@@ -16,10 +18,24 @@ import (
 func main() {
 	store := storage.NewInMemoryStorage() // хранилище
 
-	if err := store.LoadFromFile("backup.json"); err != nil {
-		log.Println("Load from file failed:", err)
+	rdb := redis.NewClient(&redis.Options{})
+
+	redisPersister := persist.NewRedisPersister(rdb, "myapp:items")
+	filePersister := persist.NewFilePersister("backup.json")
+
+	data, err := redisPersister.Load()
+	if err != nil || data == nil {
+		data, err = filePersister.Load()
+		if err != nil {
+			log.Println(err)
+		}
 	}
-	// пытаемся загрузить данные из бэкап-файла
+	if data != nil {
+		store.Replace(data)
+	}
+	// сначал идем в редис за дампом, если ошибка, то идем в файл
+	// если чтение из файла дает ошибку, то оставляем пустую мапу
+	// если все хорошо и мы получили данные(даже пустые), то вписываем их в store
 
 	itemController := controller.NewItemController(store) // контроллер
 	router := mux.NewRouter()                             // маршрутизатор
@@ -54,12 +70,12 @@ func main() {
 	}
 	// даем серверу мягко завершится за эти 5 секунд, иначе завершаем аварийно
 
-	if err := store.SaveToFile("backup.json"); err != nil {
-		log.Println("Failed to save backup.json:", err)
-	} else {
-		log.Println("Saved backup.json")
+	snapshot := store.Snapshot()
+	if err = redisPersister.Dump(snapshot); err != nil {
+		log.Println(err)
 	}
-	// делаем бэкап в файл
-
+	if err = filePersister.Dump(snapshot); err != nil {
+		log.Println(err)
+	}
 	log.Println("Server exiting")
 }
