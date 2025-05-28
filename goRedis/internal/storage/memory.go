@@ -20,7 +20,7 @@ func NewInMemoryStorage() *InMemoryStorage {
 func (s *InMemoryStorage) AddItem(item model.Item) (err error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if _, ok := s.items[item.ID]; !ok {
+	if _, ok := s.items[item.ID]; ok {
 		return fmt.Errorf("item already exists")
 	}
 	s.items[item.ID] = item
@@ -30,9 +30,9 @@ func (s *InMemoryStorage) AddItem(item model.Item) (err error) {
 func (s *InMemoryStorage) GetAllItems() (items []model.Item, err error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	items = make([]model.Item, len(s.items))
-	for i, item := range s.items {
-		items[i] = item
+	items = make([]model.Item, 0, len(s.items))
+	for _, item := range s.items {
+		items = append(items, item)
 	}
 	return items, nil
 }

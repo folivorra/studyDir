@@ -7,21 +7,21 @@ import (
 	"github.com/folivorra/studyDir/tree/develop/goRedis/internal/persist"
 	"github.com/folivorra/studyDir/tree/develop/goRedis/internal/storage"
 	"github.com/gorilla/mux"
-	"github.com/redis/go-redis/v9"
 	"log"
 	"net/http"
 	"os"
 	"os/signal"
+	"syscall"
 	"time"
 )
 
 func main() {
 	store := storage.NewInMemoryStorage() // хранилище
 
-	rdb := redis.NewClient(&redis.Options{})
+	rdb := storage.NewRedisClient()
 
 	redisPersister := persist.NewRedisPersister(rdb, "myapp:items")
-	filePersister := persist.NewFilePersister("backup.json")
+	filePersister := persist.NewFilePersister("/app/data/backup.json")
 
 	data, err := redisPersister.Load()
 	if err != nil || data == nil {
@@ -56,10 +56,19 @@ func main() {
 	// сервер слушает порт и при возникновении ошибки (кроме ошибки graceful shutdown) аварийно завершает работу
 
 	quit := make(chan os.Signal)
-	signal.Notify(quit, os.Interrupt)
+	signal.Notify(quit, os.Interrupt, syscall.SIGTERM)
 	<-quit
 	log.Println("Gracefully shutdown the server...")
 	// создаем канал прерывания, чтобы корректно обрабатывать нажатие Ctrl+C, вызывая GS
+
+	snapshot := store.Snapshot()
+	if err = redisPersister.Dump(snapshot); err != nil {
+		log.Println(err)
+	}
+	fmt.Println("DUMPING")
+	if err = filePersister.Dump(snapshot); err != nil {
+		log.Println(err)
+	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -70,12 +79,5 @@ func main() {
 	}
 	// даем серверу мягко завершится за эти 5 секунд, иначе завершаем аварийно
 
-	snapshot := store.Snapshot()
-	if err = redisPersister.Dump(snapshot); err != nil {
-		log.Println(err)
-	}
-	if err = filePersister.Dump(snapshot); err != nil {
-		log.Println(err)
-	}
 	log.Println("Server exiting")
 }
