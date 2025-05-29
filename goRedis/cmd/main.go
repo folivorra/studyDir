@@ -16,7 +16,7 @@ import (
 )
 
 func main() {
-	err := logger.Init("app.log")
+	err := logger.Init("/app/logs/app.log")
 	if err != nil {
 		log.Fatal("Failed to init logger: ", err)
 	}
