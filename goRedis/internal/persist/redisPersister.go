@@ -3,8 +3,11 @@ package persist
 import (
 	"context"
 	"encoding/json"
+	"github.com/folivorra/studyDir/tree/develop/goRedis/internal/logger"
 	"github.com/folivorra/studyDir/tree/develop/goRedis/internal/model"
+	"github.com/folivorra/studyDir/tree/develop/goRedis/internal/storage"
 	"github.com/redis/go-redis/v9"
+	"time"
 )
 
 type RedisPersister struct {
@@ -24,7 +27,7 @@ func (p *RedisPersister) Dump(data map[int]model.Item) error {
 		return err
 	}
 
-	if err = p.rdb.Set(ctx, p.key, string(bytes), 0).Err(); err != nil {
+	if err = p.rdb.Set(ctx, p.key, string(bytes), 1*time.Minute).Err(); err != nil {
 		return err
 	}
 
@@ -47,4 +50,30 @@ func (p *RedisPersister) Load() (map[int]model.Item, error) {
 	}
 
 	return result, nil
+}
+
+func (p *RedisPersister) DumpForTTL(store *storage.InMemoryStorage) {
+	ticker := time.NewTicker(7 * time.Second)
+	defer ticker.Stop()
+
+	for range ticker.C {
+		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		ttl, err := p.rdb.TTL(ctx, p.key).Result()
+		cancel()
+		// от зависаний редиса
+		if err != nil {
+			logger.WarningLogger.Println("Failed to get TTL:", err)
+			continue
+		}
+
+		if ttl > -2*time.Second && ttl < 10*time.Second {
+			snapshot := store.Snapshot()
+
+			if err = p.Dump(snapshot); err != nil {
+				logger.ErrorLogger.Println("Failed to dump snapshot:", err)
+			} else {
+				logger.InfoLogger.Println("Snapshot dumped successfully")
+			}
+		}
+	}
 }

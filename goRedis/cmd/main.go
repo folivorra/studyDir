@@ -67,8 +67,12 @@ func main() {
 			logger.ErrorLogger.Printf("Failed to listen: %v", err)
 		}
 	}()
+
 	// запускаем сервер в горутине чтобы не заблокироваться в main
 	// сервер слушает порт и при возникновении ошибки (кроме ошибки graceful shutdown) аварийно завершает работу
+
+	go redisPersister.DumpForTTL(store)
+	// дампер по ттл
 
 	quit := make(chan os.Signal)
 	signal.Notify(quit, os.Interrupt, syscall.SIGTERM)
