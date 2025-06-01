@@ -52,27 +52,32 @@ func (p *RedisPersister) Load() (map[int]model.Item, error) {
 	return result, nil
 }
 
-func (p *RedisPersister) DumpForTTL(store *storage.InMemoryStorage) {
+func (p *RedisPersister) DumpForTTL(ctx context.Context, store *storage.InMemoryStorage) {
 	ticker := time.NewTicker(7 * time.Second)
 	defer ticker.Stop()
 
-	for range ticker.C {
-		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-		ttl, err := p.rdb.TTL(ctx, p.key).Result()
-		cancel()
-		// от зависаний редиса
-		if err != nil {
-			logger.WarningLogger.Println("Failed to get TTL:", err)
-			continue
-		}
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+			ttl, err := p.rdb.TTL(ctx, p.key).Result()
+			cancel()
+			// от зависаний редиса
+			if err != nil {
+				logger.WarningLogger.Println("Failed to get TTL:", err)
+				continue
+			}
 
-		if ttl >= -1 && ttl < 10*time.Second {
-			snapshot := store.Snapshot()
+			if ttl >= -1 && ttl < 10*time.Second {
+				snapshot := store.Snapshot()
 
-			if err = p.Dump(snapshot, 2*time.Minute); err != nil {
-				logger.ErrorLogger.Println("Failed to dump snapshot:", err)
-			} else {
-				logger.InfoLogger.Println("Snapshot dumped successfully")
+				if err = p.Dump(snapshot, 2*time.Minute); err != nil {
+					logger.ErrorLogger.Println("Failed to dump snapshot:", err)
+				} else {
+					logger.InfoLogger.Println("Snapshot dumped successfully")
+				}
 			}
 		}
 	}

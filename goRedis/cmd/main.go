@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"github.com/folivorra/studyDir/tree/develop/goRedis/internal/cli"
 	"github.com/folivorra/studyDir/tree/develop/goRedis/internal/controller"
 	"github.com/folivorra/studyDir/tree/develop/goRedis/internal/logger"
 	"github.com/folivorra/studyDir/tree/develop/goRedis/internal/persist"
@@ -71,15 +72,23 @@ func main() {
 	// запускаем сервер в горутине чтобы не заблокироваться в main
 	// сервер слушает порт и при возникновении ошибки (кроме ошибки graceful shutdown) аварийно завершает работу
 
-	go redisPersister.DumpForTTL(store)
+	ctx, cancel := context.WithCancel(context.Background())
+	// контекст для отмены долгоиграющих горутин
+
+	go redisPersister.DumpForTTL(ctx, store)
 	// дампер по ттл
 	// дамп во время работы сервиса задает ттл в 2 минуты
 	// в то же время дамп по окончанию работы сервиса сохраняет данные бессрочно
+
+	go cli.RunCLI(ctx, store)
+	// cli интерфейс - чтобы воспользоваться нужно зайти в рабочий терминал контейнера с помощью команды
+	// docker attach myapp, чтобы выйти последовательно нажать Ctrl+P, Ctrl+Q
 
 	quit := make(chan os.Signal)
 	signal.Notify(quit, os.Interrupt, syscall.SIGTERM)
 	<-quit
 	logger.InfoLogger.Println("Shutdown server ...")
+	cancel()
 	// создаем канал прерывания, чтобы корректно обрабатывать нажатие Ctrl+C, вызывая GS
 
 	snapshot := store.Snapshot()
@@ -94,11 +103,11 @@ func main() {
 		logger.InfoLogger.Println("Snapshot dumped in file")
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer shutdownCancel()
 	// задаем контекст отмены в 5 секунд, откладывая освобождение ресурсов
 
-	if err = srv.Shutdown(ctx); err != nil {
+	if err = srv.Shutdown(shutdownCtx); err != nil {
 		logger.ErrorLogger.Println("Failed to gracefully shutdown server")
 	} else {
 		logger.InfoLogger.Println("Server gracefully shutdown")
