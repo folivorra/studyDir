@@ -19,7 +19,7 @@ func NewRedisPersister(rdb *redis.Client, key string) *RedisPersister {
 	return &RedisPersister{rdb: rdb, key: key}
 }
 
-func (p *RedisPersister) Dump(data map[int]model.Item) error {
+func (p *RedisPersister) Dump(data map[int]model.Item, ttl time.Duration) error {
 	ctx := context.Background()
 
 	bytes, err := json.Marshal(data)
@@ -27,7 +27,7 @@ func (p *RedisPersister) Dump(data map[int]model.Item) error {
 		return err
 	}
 
-	if err = p.rdb.Set(ctx, p.key, string(bytes), 1*time.Minute).Err(); err != nil {
+	if err = p.rdb.Set(ctx, p.key, string(bytes), ttl).Err(); err != nil {
 		return err
 	}
 
@@ -66,10 +66,10 @@ func (p *RedisPersister) DumpForTTL(store *storage.InMemoryStorage) {
 			continue
 		}
 
-		if ttl > -2*time.Second && ttl < 10*time.Second {
+		if ttl >= -1 && ttl < 10*time.Second {
 			snapshot := store.Snapshot()
 
-			if err = p.Dump(snapshot); err != nil {
+			if err = p.Dump(snapshot, 2*time.Minute); err != nil {
 				logger.ErrorLogger.Println("Failed to dump snapshot:", err)
 			} else {
 				logger.InfoLogger.Println("Snapshot dumped successfully")

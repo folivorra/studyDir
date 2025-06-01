@@ -34,10 +34,10 @@ func main() {
 
 	data, err := redisPersister.Load()
 	if err != nil || data == nil {
-		logger.WarningLogger.Println("Failed to load data from redis")
+		logger.WarningLogger.Println("Failed to load data from redis:", err)
 		data, err = filePersister.Load()
 		if err != nil {
-			logger.WarningLogger.Println("Failed to load data from file")
+			logger.WarningLogger.Println("Failed to load data from file:", err)
 		} else {
 			logger.InfoLogger.Println("Loaded data from file")
 		}
@@ -73,6 +73,8 @@ func main() {
 
 	go redisPersister.DumpForTTL(store)
 	// дампер по ттл
+	// дамп во время работы сервиса задает ттл в 2 минуты
+	// в то же время дамп по окончанию работы сервиса сохраняет данные бессрочно
 
 	quit := make(chan os.Signal)
 	signal.Notify(quit, os.Interrupt, syscall.SIGTERM)
@@ -81,7 +83,7 @@ func main() {
 	// создаем канал прерывания, чтобы корректно обрабатывать нажатие Ctrl+C, вызывая GS
 
 	snapshot := store.Snapshot()
-	if err = redisPersister.Dump(snapshot); err != nil {
+	if err = redisPersister.Dump(snapshot, 0); err != nil {
 		logger.ErrorLogger.Println("Failed to dump snapshot in redis")
 	} else {
 		logger.InfoLogger.Println("Snapshot dumped in redis")
