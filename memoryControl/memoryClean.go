@@ -8,10 +8,10 @@ import (
 )
 
 func main() {
-	memoryClean()
+	MemoryClean()
 }
 
-func memoryClean() {
+func MemoryClean() {
 	debug.SetMemoryLimit(1024 * 1024 * 1024) // 1 GB
 
 	var memStats runtime.MemStats
