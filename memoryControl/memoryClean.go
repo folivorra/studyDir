@@ -26,6 +26,8 @@ func main() {
 	//start = time.Now()
 	//runWithPool()
 	//fmt.Println("Duration:", time.Since(start))
+
+	FromGoToOC()
 }
 
 func MemoryClean() {
@@ -196,4 +198,31 @@ func runWithPool() {
 	printStats("WithPool-After")
 
 	// sync.Pool реально где то используют активно??
+}
+
+func FromGoToOC() {
+	var m runtime.MemStats
+
+	for i := 0; i < 100; i++ {
+		buf := make([]byte, 50*1024*1024) // выделяем большой блок
+		_ = buf[0]                        // используем, чтобы не оптимизировали
+		buf = nil                         // отпускаем
+		runtime.GC()                      // просим GC собрать мусор
+
+		time.Sleep(time.Millisecond * 300)
+		runtime.ReadMemStats(&m)
+		fmt.Printf("Iteration %d - HeapInuse = %d MB | HeapReleased = %d MB | Sys = %d MB\n",
+			i+1,
+			m.HeapInuse/1024/1024,
+			m.HeapReleased/1024/1024,
+			m.Sys/1024/1024,
+		)
+	}
+
+	runtime.ReadMemStats(&m)
+	fmt.Printf("END - HeapInuse = %d MB | HeapReleased = %d MB | Sys = %d MB\n",
+		m.HeapInuse/1024/1024,
+		m.HeapReleased/1024/1024,
+		m.Sys/1024/1024,
+	)
 }
