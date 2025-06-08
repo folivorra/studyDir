@@ -4,11 +4,28 @@ import (
 	"fmt"
 	"runtime"
 	"runtime/debug"
+	"sync"
 	"time"
 )
 
+type MyStruct struct {
+	A int
+	B float64
+	C [30]string
+}
+
 func main() {
-	MemoryClean()
+	//fmt.Println("Без sync.Pool")
+	//start := time.Now()
+	//runWithoutPool()
+	//fmt.Println("Duration:", time.Since(start))
+	//
+	//sink = nil // очистка
+	//
+	//fmt.Println("\nС sync.Pool")
+	//start = time.Now()
+	//runWithPool()
+	//fmt.Println("Duration:", time.Since(start))
 }
 
 func MemoryClean() {
@@ -83,4 +100,100 @@ func MemoryClean() {
 
 	fmt.Println("Main: выхожу")
 	//ticker.Stop()
+}
+
+func BlackBox() {
+	done := make(chan struct{})
+	var memStats runtime.MemStats
+
+	go func() {
+		ticker := time.NewTicker(time.Millisecond * 100)
+		defer ticker.Stop()
+
+		for {
+			select {
+			case <-ticker.C:
+				runtime.ReadMemStats(&memStats)
+				fmt.Println("HeapAlloc =", memStats.HeapAlloc/1024/1024, "MB", "NumGC =", memStats.NumGC)
+			case <-done:
+				return
+			}
+		}
+	}()
+
+	var S []*MyStruct
+
+	for i := 0; i < 100000000; i++ {
+		s := &MyStruct{
+			A: i,
+			B: float64(i) * 0.33,
+			C: [30]string{"agdfg", "bbcv", "casd"},
+		}
+
+		if s.A%2 == 0 {
+			_ = s.C[1]
+		}
+
+		S = append(S, s)
+
+		s = nil
+
+		if len(S) > 1000000 {
+			S = nil
+		}
+	}
+
+	time.Sleep(10 * time.Millisecond)
+
+	fmt.Println("Main: всё закончилось, выхожу")
+	close(done)
+}
+
+const (
+	iterations = 500_000
+	bufSize    = 1024
+)
+
+var sink []byte
+
+func printStats(phase string) {
+	var m runtime.MemStats
+	runtime.ReadMemStats(&m)
+	fmt.Printf("[%s] Alloc = %d KB | TotalAlloc = %d KB | NumGC = %d | Mallocs = %d\n",
+		phase, m.Alloc/1024, m.TotalAlloc/1024, m.NumGC, m.Mallocs)
+}
+
+func runWithoutPool() {
+	printStats("NoPool-Before")
+
+	for i := 0; i < iterations; i++ {
+		buf := make([]byte, bufSize)
+		buf[0] = byte(i) // используем буфер, чтобы не удалился
+		sink = append(sink, buf...)
+	}
+
+	runtime.GC()
+	printStats("NoPool-After")
+}
+
+func runWithPool() {
+	pool := sync.Pool{
+		New: func() any {
+			b := make([]byte, bufSize)
+			return b
+		},
+	}
+
+	printStats("WithPool-Before")
+
+	for i := 0; i < iterations; i++ {
+		buf := pool.Get().([]byte)
+		buf[0] = byte(i)
+		pool.Put(buf)
+	}
+
+	runtime.GC()
+	printStats("WithPool-After")
+
+	// sync.Pool реально где то используют активно??
 }
