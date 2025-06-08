@@ -27,7 +27,24 @@ func main() {
 	//runWithPool()
 	//fmt.Println("Duration:", time.Since(start))
 
-	FromGoToOC()
+	//FromGoToOC()
+
+	//var m runtime.MemStats
+	//runtime.ReadMemStats(&m)
+	//fmt.Printf("Before: StackInuse = %d KB | HeapAlloc = %d KB\n", m.StackInuse/1024, m.HeapAlloc/1024)
+	//
+	//recurse(0, 8000)
+	//
+	//runtime.ReadMemStats(&m)
+	//fmt.Printf("After:  StackInuse = %d KB | HeapAlloc = %d KB\n\n", m.StackInuse/1024, m.HeapAlloc/1024)
+	//
+	//runtime.ReadMemStats(&m)
+	//fmt.Printf("Before: StackInuse = %d KB | HeapAlloc = %d KB\n", m.StackInuse/1024, m.HeapAlloc/1024)
+	//
+	//_ = heapAlloc(8000)
+	//
+	//runtime.ReadMemStats(&m)
+	//fmt.Printf("After:  StackInuse = %d KB | HeapAlloc = %d KB\n", m.StackInuse/1024, m.HeapAlloc/1024)
 }
 
 func MemoryClean() {
@@ -225,4 +242,28 @@ func FromGoToOC() {
 		m.HeapReleased/1024/1024,
 		m.Sys/1024/1024,
 	)
+}
+
+type Node struct {
+	next *Node
+	data [128]byte
+}
+
+func heapAlloc(n int) *Node {
+	var head *Node
+	for i := 0; i < n; i++ {
+		head = &Node{
+			next: head,
+		}
+	}
+	return head
+}
+
+func recurse(depth, max int) {
+	var x [128]byte
+	_ = x[0]
+	if depth >= max {
+		return
+	}
+	recurse(depth+1, max)
 }
